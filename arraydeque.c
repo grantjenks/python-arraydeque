@@ -2,6 +2,13 @@
 #include <Python.h>
 #include <structmember.h>
 
+/* Define the module version here.
+   If ARRAYDEQUE_VERSION is already defined (for example via a compiler flag),
+   we won’t override it. */
+#ifndef ARRAYDEQUE_VERSION
+#define ARRAYDEQUE_VERSION "0.1.0"
+#endif
+
 /* The ArrayDeque object structure. We keep an array of PyObject*,
    a capacity, the current number of items (size), and two indices:
    head is the index of the first valid item and tail is the index just
@@ -377,7 +384,7 @@ static PyMethodDef ArrayDeque_methods[] = {
 /* Type definition for ArrayDeque */
 static PyTypeObject ArrayDequeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "arraydeque.ArrayDeque",
+    .tp_name = "arraydeque",
     .tp_doc = "Array-backed deque",
     .tp_basicsize = sizeof(ArrayDequeObject),
     .tp_itemsize = 0,
@@ -411,9 +418,15 @@ PyInit_arraydeque(void)
     m = PyModule_Create(&arraydequemodule);
     if (m == NULL)
         return NULL;
+    /* Add the type object */
     Py_INCREF(&ArrayDequeType);
     if (PyModule_AddObject(m, "ArrayDeque", (PyObject *)&ArrayDequeType) < 0) {
         Py_DECREF(&ArrayDequeType);
+        Py_DECREF(m);
+        return NULL;
+    }
+    /* Add the version in the module so that arraydeque.__version__ is available */
+    if (PyModule_AddStringConstant(m, "__version__", ARRAYDEQUE_VERSION) < 0) {
         Py_DECREF(m);
         return NULL;
     }
