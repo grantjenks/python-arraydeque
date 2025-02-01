@@ -10,6 +10,8 @@ ArrayDeque is a fast, array-backed deque implementation for Python written in C.
 - **C Extension:** A complete CPython C-extension for optimal speed.
 - **Benchmark Included:** Compare performance with Python’s built-in `collections.deque`.
 
+![alt text](https://github.com/grantjenks/python-arraydeque/blob/main/plot.png?raw=true)
+
 ## Installation
 
 There are two ways to install ArrayDeque.
