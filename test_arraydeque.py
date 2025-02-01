@@ -1,6 +1,7 @@
 import unittest
 import arraydeque
 from arraydeque import ArrayDeque
+from collections import deque
 
 
 class TestArrayDeque(unittest.TestCase):
@@ -75,12 +76,32 @@ class TestArrayDeque(unittest.TestCase):
         with self.assertRaises(IndexError):
             self.deque[-5] = 999
 
+    def test_invalid_index_type_get(self):
+        # Test __getitem__ with a non-integer index.
+        self.deque.extend([1, 2, 3])
+        with self.assertRaises(TypeError):
+            _ = self.deque['0']
+
+    def test_invalid_index_type_set(self):
+        # Test __setitem__ with a non-integer index.
+        self.deque.extend([1, 2, 3])
+        with self.assertRaises(TypeError):
+            self.deque['1'] = 100
+
     def test_iteration(self):
         # Test that the deque is iterable.
         items = [1, 2, 3, 4, 5]
         self.deque.extend(items)
         iterated = [item for item in self.deque]
         self.assertEqual(iterated, items)
+
+    def test_contains(self):
+        # Test the __contains__ behavior via iteration.
+        items = [10, 20, 30]
+        self.deque.extend(items)
+        for item in items:
+            self.assertTrue(item in self.deque)
+        self.assertFalse(999 in self.deque)
 
     def test_clear(self):
         # Test the clear() method.
@@ -100,9 +121,7 @@ class TestArrayDeque(unittest.TestCase):
         self.deque.extend([30, 40])  # deque: [20, 10, 30, 40]
         self.deque.extendleft(
             [50, 60]
-        )  # extendleft pushes items so that the iterable is reversed;
-        # equivalent to: appendleft(50), then appendleft(60)
-        # resulting deque: [60, 50, 20, 10, 30, 40]
+        )  # extendleft reverses the order: [60, 50, 20, 10, 30, 40]
         self.assertEqual(list(self.deque), [60, 50, 20, 10, 30, 40])
 
         # Remove from both ends.
@@ -123,8 +142,48 @@ class TestArrayDeque(unittest.TestCase):
         self.assertEqual(list(self.deque), expected)
         self.assertEqual(len(self.deque), 100)
 
+    def test_slice_unsupported(self):
+        # collections.deque does not support slicing. Our implementation should also raise TypeError.
+        self.deque.extend([1, 2, 3, 4, 5])
+        with self.assertRaises(TypeError):
+            _ = self.deque[1:3]
+
+    def test_repr_and_str(self):
+        # While our type doesn't override __repr__ or __str__, it should at least
+        # return a string without error.
+        self.deque.extend([1, 2, 3])
+        rep = repr(self.deque)
+        self.assertTrue(isinstance(rep, str))
+        st = str(self.deque)
+        self.assertTrue(isinstance(st, str))
+
+    def test_comparison_with_list_and_deque(self):
+        # Test that the behavior of ArrayDeque (iteration order, len, indexing)
+        # is consistent with that of a list and collections.deque.
+        items = list(range(20))
+        ad = ArrayDeque()
+        cd = deque()
+        for item in items:
+            ad.append(item)
+            cd.append(item)
+        self.assertEqual(list(ad), list(cd))
+        self.assertEqual(len(ad), len(cd))
+        for i in range(len(items)):
+            self.assertEqual(ad[i], list(cd)[i])
+
+    def test_initializer_with_iterable(self):
+        # Test that the initializer accepts an iterable, similar to collections.deque.
+        # Assuming that ArrayDeque has been extended to support an iterable as an argument.
+        ad = ArrayDeque([1, 2, 3, 4])
+        self.assertEqual(list(ad), [1, 2, 3, 4])
+        # Test with an empty iterable.
+        ad_empty = ArrayDeque([])
+        self.assertEqual(list(ad_empty), [])
+
     def test_version(self):
-        assert tuple(map(int, arraydeque.__version__.split('.'))) > (0, 0, 0)
+        # Version should be set to a valid non-zero version.
+        ver_tuple = tuple(map(int, arraydeque.__version__.split('.')))
+        self.assertGreater(ver_tuple, (0, 0, 0))
 
 
 if __name__ == '__main__':
