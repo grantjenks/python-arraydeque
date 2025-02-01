@@ -16,7 +16,7 @@ jobs:
           - env: py39
             python-version: 3.9
           - env: py310
-            python-version: 3.10
+            python-version: '3.10'
           - env: py311
             python-version: 3.11
           - env: py312
