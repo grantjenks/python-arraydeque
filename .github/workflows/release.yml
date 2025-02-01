@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'   # Trigger on version tags such as v1.0.0
+
+jobs:
+  build_wheels:
+    # Use a matrix to build wheels concurrently on Ubuntu, macOS, and Windows.
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.x
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install cibuildwheel==2.15.0
+
+      - name: Build wheels with cibuildwheel
+        env:
+          # Build all wheels available for the platform.
+          CIBW_BUILD: "*"
+          # cibuildwheel auto-detects the current platform; we pass in the matrix value.
+          CIBW_PLATFORM: ${{ matrix.os }}
+        run: cibuildwheel --output-dir wheelhouse .
+
+      - name: Upload built wheels
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  publish:
+    # Wait for all platforms to build, then publish wheels.
+    needs: build_wheels
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download wheels (Ubuntu)
+        uses: actions/download-artifact@v3
+        with:
+          name: wheels-ubuntu-latest
+          path: wheels
+
+      - name: Download wheels (macOS)
+        uses: actions/download-artifact@v3
+        with:
+          name: wheels-macos-latest
+          path: wheels
+
+      - name: Download wheels (Windows)
+        uses: actions/download-artifact@v3
+        with:
+          name: wheels-windows-latest
+          path: wheels
+
+      - name: Publish wheels to PyPI
+        run: |
+          python -m pip install --upgrade pip twine
+          twine upload wheels/*.whl
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
