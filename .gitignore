@@ -1,0 +1,6 @@
+build/
+env3/
+*.egg-info/
+
+*.so
+*.pyc
