@@ -124,7 +124,7 @@ class TestArrayDeque(unittest.TestCase):
         self.assertEqual(len(self.deque), 100)
 
     def test_version(self):
-        assert tuple(map(int, arraydeque.__version__.split("."))) > (0, 0, 0)
+        assert tuple(map(int, arraydeque.__version__.split('.'))) > (0, 0, 0)
 
 
 if __name__ == '__main__':
