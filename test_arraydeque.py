@@ -1,8 +1,8 @@
 import unittest
 from arraydeque import ArrayDeque
 
-class TestArrayDeque(unittest.TestCase):
 
+class TestArrayDeque(unittest.TestCase):
     def setUp(self):
         self.deque = ArrayDeque()
 
@@ -94,12 +94,14 @@ class TestArrayDeque(unittest.TestCase):
 
     def test_mixed_operations(self):
         # A mix of operations to simulate realistic usage.
-        self.deque.append(10)         # deque: [10]
-        self.deque.appendleft(20)     # deque: [20, 10]
-        self.deque.extend([30, 40])   # deque: [20, 10, 30, 40]
-        self.deque.extendleft([50, 60])  # extendleft pushes items so that the iterable is reversed;
-                                       # equivalent to: appendleft(50), then appendleft(60)
-                                       # resulting deque: [60, 50, 20, 10, 30, 40]
+        self.deque.append(10)  # deque: [10]
+        self.deque.appendleft(20)  # deque: [20, 10]
+        self.deque.extend([30, 40])  # deque: [20, 10, 30, 40]
+        self.deque.extendleft(
+            [50, 60]
+        )  # extendleft pushes items so that the iterable is reversed;
+        # equivalent to: appendleft(50), then appendleft(60)
+        # resulting deque: [60, 50, 20, 10, 30, 40]
         self.assertEqual(list(self.deque), [60, 50, 20, 10, 30, 40])
 
         # Remove from both ends.

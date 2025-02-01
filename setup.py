@@ -1,9 +1,6 @@
 from setuptools import setup, Extension
 
-module = Extension(
-    'arraydeque',
-    sources=['arraydeque.c']
-)
+module = Extension('arraydeque', sources=['arraydeque.c'])
 
 setup(
     name='arraydeque',
