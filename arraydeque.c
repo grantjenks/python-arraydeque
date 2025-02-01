@@ -256,7 +256,7 @@ ArrayDeque_setitem(ArrayDequeObject *self, PyObject *key, PyObject *value)
     return ArrayDeque_seq_setitem(self, index, value);
 }
 
-/* Define sequence methods (supporting __len__ and slicing via __getitem__ and __setitem__) */
+/* Define sequence methods (supporting __len__ and indexing via __getitem__ and __setitem__) */
 static PySequenceMethods ArrayDeque_as_sequence = {
     (lenfunc)ArrayDeque_length,           /* sq_length */
     0,                                    /* sq_concat */
@@ -350,6 +350,34 @@ ArrayDeque_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return (PyObject *)self;
 }
 
+/* __init__ method: optionally initialize the deque with an iterable.
+   This allows calls such as ArrayDeque([1, 2, 3, 4]). */
+static int
+ArrayDeque_init(ArrayDequeObject *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *iterable = NULL;
+    if (!PyArg_ParseTuple(args, "|O", &iterable))
+        return -1;
+    if (iterable && iterable != Py_None) {
+        PyObject *iterator = PyObject_GetIter(iterable);
+        if (iterator == NULL)
+            return -1;
+        PyObject *item;
+        while ((item = PyIter_Next(iterator)) != NULL) {
+            if (ArrayDeque_append(self, item) == NULL) {
+                Py_DECREF(item);
+                Py_DECREF(iterator);
+                return -1;
+            }
+            Py_DECREF(item);
+        }
+        Py_DECREF(iterator);
+        if (PyErr_Occurred())
+            return -1;
+    }
+    return 0;
+}
+
 /* __dealloc__ method: free all references and the array */
 static void
 ArrayDeque_dealloc(ArrayDequeObject *self)
@@ -391,6 +419,7 @@ static PyTypeObject ArrayDequeType = {
     .tp_dealloc = (destructor)ArrayDeque_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_new = ArrayDeque_new,
+    .tp_init = (initproc)ArrayDeque_init,
     .tp_iter = (getiterfunc)ArrayDeque_iter,
     .tp_methods = ArrayDeque_methods,
     .tp_as_sequence = &ArrayDeque_as_sequence,
