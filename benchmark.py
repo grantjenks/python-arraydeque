@@ -13,6 +13,7 @@ on various operations:
 
 Each benchmark is run 5 times and the median is taken.
 The results are then plotted on a bar chart using matplotlib with the fivethirtyeight style.
+The figure size has been set to 12 (width) and saved as "plot.png".
 """
 
 import timeit
@@ -157,7 +158,8 @@ def main():
     x = np.arange(len(benchmarks_names))
     width = 0.35
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # Changed figsize width to 12.
+    fig, ax = plt.subplots(figsize=(12, 6))
 
     rects1 = ax.bar(x - width/2, data[ds_names[0]], width, label=ds_names[0])
     rects2 = ax.bar(x + width/2, data[ds_names[1]], width, label=ds_names[1])
@@ -177,12 +179,15 @@ def main():
                         xy=(rect.get_x() + rect.get_width() / 2, height),
                         xytext=(0, 3),  # 3 points vertical offset
                         textcoords="offset points",
-                        ha="center", va="bottom")
+                        ha="center", va="bottom",
+                        fontsize=8)  # Reduced font size for annotations
 
     autolabel(rects1)
     autolabel(rects2)
 
     fig.tight_layout()
+    # Save the plot as plot.png.
+    plt.savefig("plot.png")
     plt.show()
 
 if __name__ == '__main__':
