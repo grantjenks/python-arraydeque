@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arraydeque"
+version = "0.1"
+description = "Array-backed deque implementation"
+authors = [
+    { name = "Grant Jenks", email = "grant.jenks@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.6"
+
+[tool.setuptools]
+ext-modules = [
+    { name = "arraydeque", sources = ["arraydeque.c"] }
+]
