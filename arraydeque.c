@@ -9,10 +9,10 @@
 #define ARRAYDEQUE_VERSION "1.0.3"
 #endif
 
-/* The ArrayDeque object structure. We keep an array of PyObject*,
-   a capacity, the current number of items (size), and two indices:
-   head is the index of the first valid item and tail is the index just
-   after the last valid item. We keep the items roughly centered in the array. */
+/* The ArrayDeque object structure.
+   We keep an array of PyObject*, a capacity, the current number
+   of items (size), two indices (head and tail), and a maximum length.
+   If maxlen is negative, then the deque is unbounded. */
 typedef struct {
     PyObject_HEAD
     PyObject **array;       /* pointer to array of PyObject* */
@@ -20,6 +20,7 @@ typedef struct {
     Py_ssize_t size;        /* number of elements stored */
     Py_ssize_t head;        /* index of first element */
     Py_ssize_t tail;        /* index one past the last element */
+    Py_ssize_t maxlen;      /* maximum allowed size (if < 0 then unbounded) */
 } ArrayDequeObject;
 
 /* Forward declaration of type for iterator */
@@ -58,11 +59,27 @@ arraydeque_resize(ArrayDequeObject *self, Py_ssize_t new_capacity)
 }
 
 /* Method: append(x)
-   Append an item to the right end. */
+   Append an item to the right end.
+   If a maxlen is set and the deque is full, the leftmost item is discarded.
+   If maxlen==0, the operation is a no-op. */
 static PyObject *
 ArrayDeque_append(ArrayDequeObject *self, PyObject *arg)
 {
-    /* If there is no room at the right end, grow the array. */
+    /* If maxlen is 0, do nothing. */
+    if (self->maxlen == 0) {
+        Py_RETURN_NONE;
+    }
+
+    /* If bounded and full, drop the leftmost element. */
+    if (self->maxlen >= 0 && self->size == self->maxlen) {
+        PyObject *old = self->array[self->head];
+        Py_DECREF(old);
+        self->array[self->head] = NULL;
+        self->head++;
+        self->size--;
+    }
+
+    /* Grow the internal array if needed */
     if (self->tail >= self->capacity) {
         if (arraydeque_resize(self, self->capacity * 2) < 0)
             return NULL;
@@ -75,11 +92,25 @@ ArrayDeque_append(ArrayDequeObject *self, PyObject *arg)
 }
 
 /* Method: appendleft(x)
-   Append an item to the left end. */
+   Append an item to the left end.
+   If a maxlen is set and the deque is full, the rightmost element is discarded.
+   If maxlen==0, the operation is a no-op. */
 static PyObject *
 ArrayDeque_appendleft(ArrayDequeObject *self, PyObject *arg)
 {
-    /* If there is no room at the left end, grow the array. */
+    if (self->maxlen == 0) {
+        Py_RETURN_NONE;
+    }
+
+    /* If bounded and full, drop the rightmost element */
+    if (self->maxlen >= 0 && self->size == self->maxlen) {
+        self->tail--;
+        Py_DECREF(self->array[self->tail]);
+        self->array[self->tail] = NULL;
+        self->size--;
+    }
+
+    /* Grow the internal array if necessary */
     if (self->head <= 0) {
         if (arraydeque_resize(self, self->capacity * 2) < 0)
             return NULL;
@@ -164,8 +195,7 @@ ArrayDeque_extend(ArrayDequeObject *self, PyObject *iterable)
 
 /* Method: extendleft(iterable)
    Extend the left side of the deque by appending elements from the iterable.
-   Note that the series of left appends results in reversing the order
-   of the input. */
+   Note that left appends reverse the order relative to the input. */
 static PyObject *
 ArrayDeque_extendleft(ArrayDequeObject *self, PyObject *iterable)
 {
@@ -176,8 +206,8 @@ ArrayDeque_extendleft(ArrayDequeObject *self, PyObject *iterable)
     if (list == NULL)
         return NULL;
     len = PyList_Size(list);
-    /* Iterate in forward order: each call to appendleft will put the item
-       before the previous ones, thus reversing the order relative to the input. */
+    /* Iterate in forward order: each call to appendleft will
+       insert the item before the previous ones, thus reversing the input order. */
     for (i = 0; i < len; i++) {
         PyObject *item = PyList_GET_ITEM(list, i);
         if (ArrayDeque_appendleft(self, item) == NULL) {
@@ -256,7 +286,7 @@ ArrayDeque_setitem(ArrayDequeObject *self, PyObject *key, PyObject *value)
     return ArrayDeque_seq_setitem(self, index, value);
 }
 
-/* Define sequence methods (supporting __len__ and indexing via __getitem__ and __setitem__) */
+/* Define sequence methods (supporting __len__, __getitem__, and __setitem__) */
 static PySequenceMethods ArrayDeque_as_sequence = {
     (lenfunc)ArrayDeque_length,           /* sq_length */
     0,                                    /* sq_concat */
@@ -278,7 +308,6 @@ static PyMappingMethods ArrayDeque_as_mapping = {
 };
 
 /* Iterator for ArrayDeque */
-
 static void
 ArrayDequeIter_dealloc(ArrayDequeIter *it)
 {
@@ -295,7 +324,7 @@ ArrayDequeIter_next(ArrayDequeIter *it)
         Py_INCREF(item);
         return item;
     }
-    /* No more items: signal end of iteration */
+    /* End of iteration */
     return NULL;
 }
 
@@ -343,21 +372,41 @@ ArrayDeque_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         return NULL;
     }
-    /* Initialize all slots to NULL */
     for (Py_ssize_t i = 0; i < self->capacity; i++) {
         self->array[i] = NULL;
     }
+    /* Default: unbounded deque */
+    self->maxlen = -1;
     return (PyObject *)self;
 }
 
-/* __init__ method: optionally initialize the deque with an iterable.
-   This allows calls such as ArrayDeque([1, 2, 3, 4]). */
+/* __init__ method: optionally initialize the deque with an iterable and a maxlen.
+   Signature: ArrayDeque([iterable[, maxlen]])
+   If maxlen is provided and not None, it must be a non-negative integer.
+   When iterable is longer than maxlen, only the rightmost elements are retained.
+*/
 static int
 ArrayDeque_init(ArrayDequeObject *self, PyObject *args, PyObject *kwds)
 {
+    static char *kwlist[] = {"iterable", "maxlen", NULL};
     PyObject *iterable = NULL;
-    if (!PyArg_ParseTuple(args, "|O", &iterable))
+    PyObject *maxlen_obj = Py_None;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OO:__init__", kwlist,
+                                     &iterable, &maxlen_obj))
         return -1;
+
+    if (maxlen_obj == Py_None) {
+        self->maxlen = -1;
+    } else {
+        Py_ssize_t m = PyLong_AsSsize_t(maxlen_obj);
+        if (m < 0) {
+            PyErr_SetString(PyExc_ValueError, "maxlen must be a non-negative integer");
+            return -1;
+        }
+        self->maxlen = m;
+    }
+
     if (iterable && iterable != Py_None) {
         PyObject *iterator = PyObject_GetIter(iterable);
         if (iterator == NULL)
@@ -390,6 +439,23 @@ ArrayDeque_dealloc(ArrayDequeObject *self)
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
+/* Getter for the maxlen attribute.
+   Returns None if unbounded; otherwise a Python integer. */
+static PyObject *
+ArrayDeque_get_maxlen(ArrayDequeObject *self, void *closure)
+{
+    if (self->maxlen < 0)
+        Py_RETURN_NONE;
+    return PyLong_FromSsize_t(self->maxlen);
+}
+
+/* Get/Set definitions */
+static PyGetSetDef ArrayDeque_getsetters[] = {
+    {"maxlen", (getter)ArrayDeque_get_maxlen, NULL,
+     "maximum length (read-only); None if unbounded", NULL},
+    {NULL}  /* Sentinel */
+};
+
 /* Methods table */
 static PyMethodDef ArrayDeque_methods[] = {
     {"append",      (PyCFunction)ArrayDeque_append,      METH_O,
@@ -412,8 +478,8 @@ static PyMethodDef ArrayDeque_methods[] = {
 /* Type definition for ArrayDeque */
 static PyTypeObject ArrayDequeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "arraydeque",
-    .tp_doc = "Array-backed deque",
+    .tp_name = "arraydeque.ArrayDeque",
+    .tp_doc = "Array-backed deque with optional bounded length",
     .tp_basicsize = sizeof(ArrayDequeObject),
     .tp_itemsize = 0,
     .tp_dealloc = (destructor)ArrayDeque_dealloc,
@@ -424,13 +490,14 @@ static PyTypeObject ArrayDequeType = {
     .tp_methods = ArrayDeque_methods,
     .tp_as_sequence = &ArrayDeque_as_sequence,
     .tp_as_mapping = &ArrayDeque_as_mapping,
+    .tp_getset = ArrayDeque_getsetters,
 };
 
 /* Module definition */
 static PyModuleDef arraydequemodule = {
     PyModuleDef_HEAD_INIT,
     .m_name = "arraydeque",
-    .m_doc = "Array-based deque implementation",
+    .m_doc = "Array-based deque implementation with optional maxlen support",
     .m_size = -1,
 };
 
@@ -447,14 +514,12 @@ PyInit_arraydeque(void)
     m = PyModule_Create(&arraydequemodule);
     if (m == NULL)
         return NULL;
-    /* Add the type object */
     Py_INCREF(&ArrayDequeType);
     if (PyModule_AddObject(m, "ArrayDeque", (PyObject *)&ArrayDequeType) < 0) {
         Py_DECREF(&ArrayDequeType);
         Py_DECREF(m);
         return NULL;
     }
-    /* Add the version in the module so that arraydeque.__version__ is available */
     if (PyModule_AddStringConstant(m, "__version__", ARRAYDEQUE_VERSION) < 0) {
         Py_DECREF(m);
         return NULL;
