@@ -482,12 +482,14 @@ ArrayDeque_iter(ArrayDequeObject *self)
     return (PyObject *)it;
 }
 
-/* __new__ method: allocate a new ArrayDeque */
+/* __new__ method: allocate a new ArrayDeque.
+   This version uses PyObject_GC_New to ensure that the object
+   is not already tracked by the garbage collector (fixing issues on macOS). */
 static PyObject *
 ArrayDeque_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     ArrayDequeObject *self;
-    self = (ArrayDequeObject *)type->tp_alloc(type, 0);
+    self = PyObject_GC_New(ArrayDequeObject, type);
     if (self == NULL)
         return NULL;
     self->weakreflist = NULL;
