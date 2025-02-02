@@ -34,7 +34,7 @@ setup(
     author='Grant Jenks',
     author_email='grant.jenks@gmail.com',
     url='https://github.com/grantjenks/python-arraydeque',
-    license='Apache License 2.0',
+    license='Apache 2.0',
     license_files=['LICENSE'],
     classifiers=[
         'Development Status :: 5 - Production/Stable',
