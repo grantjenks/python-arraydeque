@@ -28,7 +28,7 @@ jobs:
 
       - name: Build wheels with cibuildwheel
         env:
-          CIBW_TEST_COMMAND: python test_arraydeque.py
+          CIBW_TEST_COMMAND: python {package}/test_arraydeque.py
         run: cibuildwheel --output-dir wheelhouse .
 
       - name: Upload built wheels
