@@ -219,6 +219,93 @@ ArrayDeque_extendleft(ArrayDequeObject *self, PyObject *iterable)
     Py_RETURN_NONE;
 }
 
+/* Method: rotate(n=1)
+   Rotate the deque n steps to the right. If n is negative, rotate left.
+   Each individual rotation is implemented using pop/popleft and append/appendleft.
+*/
+static PyObject *
+ArrayDeque_rotate(ArrayDequeObject *self, PyObject *args)
+{
+    long n = 1;
+    if (!PyArg_ParseTuple(args, "|l:rotate", &n))
+        return NULL;
+    if (self->size == 0) {
+        Py_RETURN_NONE;
+    }
+    n = n % self->size;
+    if (n > 0) {
+        for (long i = 0; i < n; i++) {
+            PyObject *item = ArrayDeque_pop(self, NULL);
+            if (item == NULL)
+                return NULL;
+            if (ArrayDeque_appendleft(self, item) == NULL) {
+                Py_DECREF(item);
+                return NULL;
+            }
+            Py_DECREF(item);
+        }
+    }
+    else if (n < 0) {
+        n = -n;
+        for (long i = 0; i < n; i++) {
+            PyObject *item = ArrayDeque_popleft(self, NULL);
+            if (item == NULL)
+                return NULL;
+            if (ArrayDeque_append(self, item) == NULL) {
+                Py_DECREF(item);
+                return NULL;
+            }
+            Py_DECREF(item);
+        }
+    }
+    Py_RETURN_NONE;
+}
+
+/* Method: remove(value)
+   Remove the first occurrence of value.
+*/
+static PyObject *
+ArrayDeque_remove(ArrayDequeObject *self, PyObject *value)
+{
+    Py_ssize_t i;
+    for (i = self->head; i < self->tail; i++) {
+        int cmp = PyObject_RichCompareBool(self->array[i], value, Py_EQ);
+        if (cmp < 0)
+            return NULL;
+        if (cmp)
+            break;
+    }
+    if (i == self->tail) {
+        PyErr_SetString(PyExc_ValueError, "value not found in deque");
+        return NULL;
+    }
+    Py_DECREF(self->array[i]);
+    for (Py_ssize_t j = i; j < self->tail - 1; j++) {
+        self->array[j] = self->array[j+1];
+    }
+    self->array[self->tail - 1] = NULL;
+    self->tail--;
+    self->size--;
+    Py_RETURN_NONE;
+}
+
+/* Method: count(value)
+   Count the number of occurrences of value.
+*/
+static PyObject *
+ArrayDeque_count(ArrayDequeObject *self, PyObject *value)
+{
+    Py_ssize_t count = 0;
+    for (Py_ssize_t i = self->head; i < self->tail; i++) {
+        int cmp = PyObject_RichCompareBool(self->array[i], value, Py_EQ);
+        if (cmp < 0)
+            return NULL;
+        if (cmp)
+            count++;
+    }
+    return PyLong_FromSsize_t(count);
+}
+
 /* Sequence protocol: __len__ support */
 static Py_ssize_t
 ArrayDeque_length(ArrayDequeObject *self)
@@ -286,26 +373,72 @@ ArrayDeque_setitem(ArrayDequeObject *self, PyObject *key, PyObject *value)
     return ArrayDeque_seq_setitem(self, index, value);
 }
 
-/* Define sequence methods (supporting __len__, __getitem__, and __setitem__) */
-static PySequenceMethods ArrayDeque_as_sequence = {
-    (lenfunc)ArrayDeque_length,           /* sq_length */
-    0,                                    /* sq_concat */
-    0,                                    /* sq_repeat */
-    (ssizeargfunc)ArrayDeque_seq_getitem,  /* sq_item */
-    0,                                    /* sq_slice */
-    (ssizeobjargproc)ArrayDeque_seq_setitem,/* sq_ass_item */
-    0,                                    /* sq_ass_slice */
-    0,                                    /* sq_contains */
-    0,                                    /* sq_inplace_concat */
-    0,                                    /* sq_inplace_repeat */
-};
+/* __contains__ implementation */
+static int
+ArrayDeque_contains(ArrayDequeObject *self, PyObject *value)
+{
+    for (Py_ssize_t i = self->head; i < self->tail; i++) {
+        int cmp = PyObject_RichCompareBool(self->array[i], value, Py_EQ);
+        if (cmp < 0)
+            return -1;
+        if (cmp)
+            return 1;
+    }
+    return 0;
+}
 
-/* Define mapping methods so that deque[index] works as expected. */
-static PyMappingMethods ArrayDeque_as_mapping = {
-    (lenfunc)ArrayDeque_length,       /* mp_length */
-    (binaryfunc)ArrayDeque_getitem,   /* mp_subscript */
-    (objobjargproc)ArrayDeque_setitem,/* mp_ass_subscript */
-};
+/* Rich comparison support: only equality and inequality are implemented */
+static PyObject *
+ArrayDeque_richcompare(PyObject *self, PyObject *other, int op)
+{
+    if (op != Py_EQ && op != Py_NE) {
+        Py_RETURN_NOTIMPLEMENTED;
+    }
+    PyObject *self_list = PySequence_List(self);
+    PyObject *other_list = PySequence_List(other);
+    if (!self_list || !other_list) {
+        Py_XDECREF(self_list);
+        Py_XDECREF(other_list);
+        return NULL;
+    }
+    int equal = PyObject_RichCompareBool(self_list, other_list, Py_EQ);
+    Py_DECREF(self_list);
+    Py_DECREF(other_list);
+    if (equal < 0)
+        return NULL;
+    if (op == Py_EQ)
+        return equal ? Py_True : Py_False;
+    else
+        return equal ? Py_False : Py_True;
+}
+
+/* __repr__ implementation */
+static PyObject *
+ArrayDeque_repr(ArrayDequeObject *self)
+{
+    PyObject *list = PyList_New(self->size);
+    if (!list)
+        return NULL;
+    for (Py_ssize_t i = 0; i < self->size; i++) {
+        PyObject *item = self->array[self->head + i];
+        Py_INCREF(item);
+        PyList_SET_ITEM(list, i, item);
+    }
+    PyObject *repr = PyObject_Repr(list);
+    Py_DECREF(list);
+    if (!repr)
+        return NULL;
+    PyObject *result = PyUnicode_FromFormat("ArrayDeque(%U)", repr);
+    Py_DECREF(repr);
+    return result;
+}
+
+/* __str__ implementation: same as __repr__ */
+static PyObject *
+ArrayDeque_str(ArrayDequeObject *self)
+{
+    return ArrayDeque_repr(self);
+}
 
 /* Iterator for ArrayDeque */
 static void
@@ -449,6 +582,39 @@ ArrayDeque_get_maxlen(ArrayDequeObject *self, void *closure)
     return PyLong_FromSsize_t(self->maxlen);
 }
 
+/* __reduce__ for pickling */
+static PyObject *
+ArrayDeque_reduce(ArrayDequeObject *self)
+{
+    PyObject *list = PyList_New(self->size);
+    if (!list)
+        return NULL;
+    for (Py_ssize_t i = 0; i < self->size; i++) {
+        PyObject *item = self->array[self->head + i];
+        Py_INCREF(item);
+        PyList_SET_ITEM(list, i, item);
+    }
+    PyObject *maxlen;
+    if (self->maxlen < 0) {
+        maxlen = Py_None;
+        Py_INCREF(Py_None);
+    } else {
+        maxlen = PyLong_FromSsize_t(self->maxlen);
+        if (maxlen == NULL) {
+            Py_DECREF(list);
+            return NULL;
+        }
+    }
+    PyObject *args = Py_BuildValue("(OO)", list, maxlen);
+    Py_DECREF(list);
+    Py_DECREF(maxlen);
+    if (!args)
+         return NULL;
+    PyObject *result = Py_BuildValue("O(O)", Py_TYPE(self), args);
+    Py_DECREF(args);
+    return result;
+}
+
 /* Get/Set definitions */
 static PyGetSetDef ArrayDeque_getsetters[] = {
     {"maxlen", (getter)ArrayDeque_get_maxlen, NULL,
@@ -472,7 +638,36 @@ static PyMethodDef ArrayDeque_methods[] = {
      "Extend the right side with elements from an iterable"},
     {"extendleft",  (PyCFunction)ArrayDeque_extendleft,  METH_O,
      "Extend the left side with elements from an iterable"},
+    {"rotate",      (PyCFunction)ArrayDeque_rotate,      METH_VARARGS,
+     "Rotate the deque n steps to the right (default 1). If n is negative, rotate left."},
+    {"remove",      (PyCFunction)ArrayDeque_remove,      METH_O,
+     "Remove the first occurrence of value"},
+    {"count",       (PyCFunction)ArrayDeque_count,       METH_O,
+     "Count the number of occurrences of value"},
+    {"__reduce__",  (PyCFunction)ArrayDeque_reduce,      METH_NOARGS,
+     "Helper for pickle."},
     {NULL}  /* Sentinel */
+};
+
+/* Define sequence methods (supporting __len__, __getitem__, __setitem__, and __contains__) */
+static PySequenceMethods ArrayDeque_as_sequence = {
+    (lenfunc)ArrayDeque_length,               /* sq_length */
+    0,                                        /* sq_concat */
+    0,                                        /* sq_repeat */
+    (ssizeargfunc)ArrayDeque_seq_getitem,       /* sq_item */
+    0,                                        /* sq_slice */
+    (ssizeobjargproc)ArrayDeque_seq_setitem,    /* sq_ass_item */
+    0,                                        /* sq_ass_slice */
+    (objobjproc)ArrayDeque_contains,            /* sq_contains */
+    0,                                        /* sq_inplace_concat */
+    0                                         /* sq_inplace_repeat */
+};
+
+/* Define mapping methods so that deque[index] works as expected. */
+static PyMappingMethods ArrayDeque_as_mapping = {
+    (lenfunc)ArrayDeque_length,       /* mp_length */
+    (binaryfunc)ArrayDeque_getitem,   /* mp_subscript */
+    (objobjargproc)ArrayDeque_setitem,/* mp_ass_subscript */
 };
 
 /* Type definition for ArrayDeque */
@@ -483,7 +678,7 @@ static PyTypeObject ArrayDequeType = {
     .tp_basicsize = sizeof(ArrayDequeObject),
     .tp_itemsize = 0,
     .tp_dealloc = (destructor)ArrayDeque_dealloc,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_new = ArrayDeque_new,
     .tp_init = (initproc)ArrayDeque_init,
     .tp_iter = (getiterfunc)ArrayDeque_iter,
@@ -491,6 +686,9 @@ static PyTypeObject ArrayDequeType = {
     .tp_as_sequence = &ArrayDeque_as_sequence,
     .tp_as_mapping = &ArrayDeque_as_mapping,
     .tp_getset = ArrayDeque_getsetters,
+    .tp_str = (reprfunc)ArrayDeque_str,
+    .tp_repr = (reprfunc)ArrayDeque_repr,
+    .tp_richcompare = ArrayDeque_richcompare,
 };
 
 /* Module definition */
