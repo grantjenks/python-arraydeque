@@ -346,6 +346,11 @@ ArrayDeque_getitem(ArrayDequeObject *self, PyObject *key)
 static int
 ArrayDeque_seq_setitem(ArrayDequeObject *self, Py_ssize_t index, PyObject *value)
 {
+    /* If value is NULL, this signals deletion which is not supported. */
+    if (value == NULL) {
+        PyErr_SetString(PyExc_TypeError, "deque deletion not supported");
+        return -1;
+    }
     if (index < 0)
         index += self->size;
     if (index < 0 || index >= self->size) {
