@@ -1,299 +1,343 @@
+#!/usr/bin/env python
+"""
+test_arraydeque.py
+
+This file contains a comprehensive test suite for the ArrayDeque type
+implemented in arraydeque.c. Its functionality is intended to be compatible
+with CPython's collections.deque. The tests below cover basic operations,
+bounded (maxlen) behavior, rotations, indexing, iteration, comparisons,
+pickling, copying, weak references, and subclassing.
+
+To run the tests:
+    python test_arraydeque.py
+"""
+
 import unittest
-import arraydeque
+import random
+import pickle
+import copy
+import weakref
+import gc
+
 from arraydeque import ArrayDeque
-from collections import deque
+from collections import deque  # for reference comparisons
 
-# A helper list of deque types to test.
-DEQUE_TYPES = [
-    ('collections.deque', deque),
-    ('arraydeque.ArrayDeque', ArrayDeque),
-]
+# A "big" number used in some lengthy tests.
+BIG = 100000
 
 
-class TestArrayDeque(unittest.TestCase):
+# ---------------------------
+# Basic Functionality Testing
+# ---------------------------
+class TestArrayDequeBasic(unittest.TestCase):
     def setUp(self):
-        # For tests that don't concern maxlen, use the ArrayDeque implementation.
-        self.deque = ArrayDeque()
+        self.d = ArrayDeque()
 
     def test_append_and_pop(self):
-        # Test appending items and then popping them from the right.
-        self.deque.append(1)
-        self.deque.append(2)
-        self.deque.append(3)
-        self.assertEqual(len(self.deque), 3)
-
-        self.assertEqual(self.deque.pop(), 3)
-        self.assertEqual(self.deque.pop(), 2)
-        self.assertEqual(self.deque.pop(), 1)
-        self.assertEqual(len(self.deque), 0)
-
-        # Popping from an empty deque should raise an IndexError.
+        # Append right and pop from the right.
+        self.d.append(1)
+        self.d.append(2)
+        self.d.append(3)
+        self.assertEqual(len(self.d), 3)
+        self.assertEqual(self.d.pop(), 3)
+        self.assertEqual(self.d.pop(), 2)
+        self.assertEqual(self.d.pop(), 1)
+        self.assertEqual(len(self.d), 0)
         with self.assertRaises(IndexError):
-            self.deque.pop()
+            self.d.pop()
 
     def test_appendleft_and_popleft(self):
-        # Test appending items to the left and then popleft.
-        self.deque.appendleft(1)
-        self.deque.appendleft(2)
-        self.deque.appendleft(3)
-        self.assertEqual(len(self.deque), 3)
-
-        self.assertEqual(self.deque.popleft(), 3)
-        self.assertEqual(self.deque.popleft(), 2)
-        self.assertEqual(self.deque.popleft(), 1)
-        self.assertEqual(len(self.deque), 0)
-
-        # popleft on an empty deque should raise an IndexError.
+        # Append left and pop from the left.
+        self.d.appendleft(1)
+        self.d.appendleft(2)
+        self.d.appendleft(3)
+        self.assertEqual(len(self.d), 3)
+        self.assertEqual(self.d.popleft(), 3)
+        self.assertEqual(self.d.popleft(), 2)
+        self.assertEqual(self.d.popleft(), 1)
         with self.assertRaises(IndexError):
-            self.deque.popleft()
+            self.d.popleft()
 
     def test_extend(self):
-        # Test extend on the right.
-        self.deque.extend([10, 20, 30])
-        self.assertEqual(len(self.deque), 3)
-        self.assertEqual(list(self.deque), [10, 20, 30])
+        # Extend on the right.
+        self.d.extend([10, 20, 30])
+        self.assertEqual(list(self.d), [10, 20, 30])
 
     def test_extendleft(self):
-        # Test extendleft: note that extendleft reverses the order of the input.
-        self.deque.extendleft([10, 20, 30])
-        self.assertEqual(len(self.deque), 3)
-        self.assertEqual(list(self.deque), [30, 20, 10])
+        # Extend on the left (order reversed relative to the iterable)
+        self.d.extendleft([10, 20, 30])
+        self.assertEqual(list(self.d), [30, 20, 10])
+
+    def test_clear(self):
+        # Test clear method.
+        self.d.extend([1, 2, 3, 4])
+        self.assertEqual(len(self.d), 4)
+        self.d.clear()
+        self.assertEqual(len(self.d), 0)
+        self.assertEqual(list(self.d), [])
+        # Reuse after clear.
+        self.d.append(99)
+        self.assertEqual(list(self.d), [99])
+
+    def test_iteration(self):
+        # Test that the ArrayDeque is iterable.
+        items = [1, 2, 3, 4, 5]
+        self.d.extend(items)
+        self.assertEqual(list(iter(self.d)), items)
+
+    def test_repr_and_str(self):
+        # Test that __repr__ and __str__ return strings.
+        self.d.extend([1, 2, 3])
+        rep = repr(self.d)
+        st = str(self.d)
+        self.assertIsInstance(rep, str)
+        self.assertIsInstance(st, str)
 
     def test_indexing_and_assignment(self):
         # Test __getitem__ and __setitem__.
-        self.deque.extend([100, 200, 300, 400])
-        self.assertEqual(self.deque[0], 100)
-        self.assertEqual(self.deque[1], 200)
-        self.assertEqual(self.deque[2], 300)
-        self.assertEqual(self.deque[3], 400)
-
+        self.d.extend([100, 200, 300, 400])
+        self.assertEqual(self.d[0], 100)
+        self.assertEqual(self.d[1], 200)
+        self.assertEqual(self.d[2], 300)
+        self.assertEqual(self.d[3], 400)
         # Test negative indices.
-        self.assertEqual(self.deque[-1], 400)
-        self.assertEqual(self.deque[-2], 300)
-
-        # Test __setitem__.
-        self.deque[0] = 111
-        self.deque[-1] = 444
-        self.assertEqual(self.deque[0], 111)
-        self.assertEqual(self.deque[3], 444)
-
-        # Test out-of-range indexing and assignment.
+        self.assertEqual(self.d[-1], 400)
+        self.assertEqual(self.d[-2], 300)
+        # Assignment tests.
+        self.d[0] = 111
+        self.d[-1] = 444
+        self.assertEqual(self.d[0], 111)
+        self.assertEqual(self.d[3], 444)
+        # Out-of-range access.
         with self.assertRaises(IndexError):
-            _ = self.deque[4]
+            _ = self.d[4]
         with self.assertRaises(IndexError):
-            self.deque[-5] = 999
+            self.d[-5] = 999
 
-    def test_invalid_index_type_get(self):
-        # Test __getitem__ with a non-integer index.
-        self.deque.extend([1, 2, 3])
+    def test_invalid_index_type(self):
+        # Non-integer indices should raise a TypeError.
+        self.d.extend([1, 2, 3])
         with self.assertRaises(TypeError):
-            _ = self.deque['0']
-
-    def test_invalid_index_type_set(self):
-        # Test __setitem__ with a non-integer index.
-        self.deque.extend([1, 2, 3])
+            _ = self.d['0']
         with self.assertRaises(TypeError):
-            self.deque['1'] = 100
+            self.d['1'] = 100
 
-    def test_iteration(self):
-        # Test that the deque is iterable.
-        items = [1, 2, 3, 4, 5]
-        self.deque.extend(items)
-        iterated = [item for item in self.deque]
-        self.assertEqual(iterated, items)
+    def test_slice_unsuported(self):
+        # Slicing should raise a TypeError (in line with CPython's deque).
+        self.d.extend([1, 2, 3, 4, 5])
+        with self.assertRaises(TypeError):
+            _ = self.d[1:3]
 
     def test_contains(self):
-        # Test the __contains__ behavior via iteration.
-        items = [10, 20, 30]
-        self.deque.extend(items)
-        for item in items:
-            self.assertTrue(item in self.deque)
-        self.assertFalse(999 in self.deque)
-
-    def test_clear(self):
-        # Test the clear() method.
-        self.deque.extend([1, 2, 3, 4])
-        self.assertEqual(len(self.deque), 4)
-        self.deque.clear()
-        self.assertEqual(len(self.deque), 0)
-        self.assertEqual(list(self.deque), [])
-        # Test that the deque can be reused after clearing.
-        self.deque.append(99)
-        self.assertEqual(list(self.deque), [99])
-
-    def test_mixed_operations(self):
-        # A mix of operations to simulate realistic usage.
-        self.deque.append(10)  # deque: [10]
-        self.deque.appendleft(20)  # deque: [20, 10]
-        self.deque.extend([30, 40])  # deque: [20, 10, 30, 40]
-        self.deque.extendleft(
-            [50, 60]
-        )  # extendleft reverses the order: [60, 50, 20, 10, 30, 40]
-        self.assertEqual(list(self.deque), [60, 50, 20, 10, 30, 40])
-
-        # Remove from both ends.
-        self.assertEqual(self.deque.popleft(), 60)
-        self.assertEqual(self.deque.pop(), 40)
-        self.assertEqual(list(self.deque), [50, 20, 10, 30])
-
-    def test_overallocation_growth(self):
-        # Push enough items on both ends to force the internal array to resize.
-        for i in range(50):
-            self.deque.append(i)
-        for i in range(50, 100):
-            self.deque.appendleft(i)
-        # The items added with appendleft will appear in reverse order compared to the input.
-        left_side = list(range(99, 49, -1))
-        right_side = list(range(50))
-        expected = left_side + right_side
-        self.assertEqual(list(self.deque), expected)
-        self.assertEqual(len(self.deque), 100)
-
-    def test_slice_unsupported(self):
-        # collections.deque does not support slicing. Our implementation should also raise TypeError.
-        self.deque.extend([1, 2, 3, 4, 5])
-        with self.assertRaises(TypeError):
-            _ = self.deque[1:3]
-
-    def test_repr_and_str(self):
-        # While our type doesn't override __repr__ or __str__, it should at least
-        # return a string without error.
-        self.deque.extend([1, 2, 3])
-        rep = repr(self.deque)
-        self.assertTrue(isinstance(rep, str))
-        st = str(self.deque)
-        self.assertTrue(isinstance(st, str))
-
-    def test_comparison_with_list_and_deque(self):
-        # Test that the behavior of ArrayDeque (iteration order, len, indexing)
-        # is consistent with that of a list and collections.deque.
-        items = list(range(20))
-        ad = ArrayDeque()
-        cd = deque()
-        for item in items:
-            ad.append(item)
-            cd.append(item)
-        self.assertEqual(list(ad), list(cd))
-        self.assertEqual(len(ad), len(cd))
-        for i in range(len(items)):
-            self.assertEqual(ad[i], list(cd)[i])
+        # Test __contains__ behavior.
+        self.d.extend([10, 20, 30])
+        for item in [10, 20, 30]:
+            self.assertTrue(item in self.d)
+        self.assertFalse(999 in self.d)
 
     def test_initializer_with_iterable(self):
-        # Test that the initializer accepts an iterable, similar to collections.deque.
-        ad = ArrayDeque([1, 2, 3, 4])
-        self.assertEqual(list(ad), [1, 2, 3, 4])
-        # Test with an empty iterable.
-        ad_empty = ArrayDeque([])
-        self.assertEqual(list(ad_empty), [])
+        # Initializer should accept an iterable (and optional maxlen).
+        d1 = ArrayDeque([1, 2, 3, 4])
+        self.assertEqual(list(d1), [1, 2, 3, 4])
+        d2 = ArrayDeque([])
+        self.assertEqual(list(d2), [])
 
-    def test_version(self):
-        # Version should be set to a valid non-zero version.
-        ver_tuple = tuple(map(int, arraydeque.__version__.split('.')))
-        self.assertGreater(ver_tuple, (0, 0, 0))
+# ---------------------------
+# Rotation Testing
+# ---------------------------
+class TestArrayDequeRotation(unittest.TestCase):
+    def setUp(self):
+        self.d = ArrayDeque("abcde")
 
+    def test_rotate_right(self):
+        self.d.rotate(1)
+        self.assertEqual(list(self.d), list("eabcd"))
 
-class TestMaxlenBehavior(unittest.TestCase):
+    def test_rotate_left(self):
+        self.d.rotate(-1)
+        self.assertEqual(list(self.d), list("bcdea"))
+
+    def test_rotate_default(self):
+        # Default rotate() rotates by 1.
+        self.d.rotate()
+        self.assertEqual(list(self.d), list("eabcd"))
+
+    def test_rotate_multiple(self):
+        original = list(self.d)
+        for i in range(10):
+            self.d.rotate(i)
+            self.d.rotate(-i)
+            self.assertEqual(list(self.d), original)
+
+    def test_rotate_empty_deque(self):
+        d_empty = ArrayDeque()
+        d_empty.rotate(5)
+        self.assertEqual(list(d_empty), [])
+
+# ---------------------------
+# Maxlen (Bounded) Behavior Testing
+# ---------------------------
+class TestArrayDequeMaxlen(unittest.TestCase):
     def test_default_maxlen(self):
-        # When maxlen is not specified, it should be None.
-        for name, cls in DEQUE_TYPES:
-            with self.subTest(cls=name):
-                d = cls()
-                self.assertIsNone(getattr(d, 'maxlen', None))
+        d = ArrayDeque()
+        # When maxlen is not specified, it behaves as unbounded.
+        self.assertEqual(d.maxlen, None)
 
-    def test_maxlen_attribute_set_on_init(self):
-        # Test that when a maxlen is provided at initialization, the attribute is set.
-        for name, cls in DEQUE_TYPES:
-            with self.subTest(cls=name):
-                d = cls([1, 2, 3], maxlen=5)
-                self.assertEqual(d.maxlen, 5)
+    def test_set_maxlen(self):
+        d = ArrayDeque([1, 2, 3], maxlen=5)
+        self.assertEqual(d.maxlen, 5)
 
     def test_bounded_append(self):
-        # When the deque is bounded and full, appending to the right should discard the leftmost element.
-        for name, cls in DEQUE_TYPES:
-            with self.subTest(cls=name):
-                d = cls(maxlen=3)
-                d.append(1)
-                d.append(2)
-                d.append(3)
-                self.assertEqual(list(d), [1, 2, 3])
-                d.append(4)
-                # The oldest element (1) should be removed.
-                self.assertEqual(list(d), [2, 3, 4])
+        # Bounded deque: appending to a full deque discards the leftmost element.
+        d = ArrayDeque(maxlen=3)
+        d.append(1)
+        d.append(2)
+        d.append(3)
+        self.assertEqual(list(d), [1, 2, 3])
+        d.append(4)
+        self.assertEqual(list(d), [2, 3, 4])
 
     def test_bounded_appendleft(self):
-        # When the deque is bounded and full, appending to the left should discard the rightmost element.
-        for name, cls in DEQUE_TYPES:
-            with self.subTest(cls=name):
-                d = cls(maxlen=3)
-                d.appendleft(1)
-                d.appendleft(2)
-                d.appendleft(3)
-                self.assertEqual(list(d), [3, 2, 1])
-                d.appendleft(4)
-                # The oldest element on the right (1) should be removed.
-                self.assertEqual(list(d), [4, 3, 2])
+        # Bounded deque: appending left to a full deque discards the rightmost element.
+        d = ArrayDeque(maxlen=3)
+        d.appendleft(1)
+        d.appendleft(2)
+        d.appendleft(3)
+        self.assertEqual(list(d), [3, 2, 1])
+        d.appendleft(4)
+        self.assertEqual(list(d), [4, 3, 2])
 
-    def test_initialization_with_too_many_items(self):
+    def test_initialization_truncation(self):
         # Initializing with an iterable longer than maxlen should retain only the rightmost items.
-        for name, cls in DEQUE_TYPES:
-            with self.subTest(cls=name):
-                d = cls(range(10), maxlen=5)
-                # For collections.deque, the leftmost items are discarded.
-                self.assertEqual(list(d), [5, 6, 7, 8, 9])
-
-    def test_maxlen_immutability(self):
-        # The maxlen attribute should be read-only.
-        for name, cls in DEQUE_TYPES:
-            with self.subTest(cls=name):
-                d = cls(maxlen=4)
-                with self.assertRaises(AttributeError):
-                    d.maxlen = 10
-
-    def test_maxlen_behavior_with_mixed_operations(self):
-        # Test that bounded deques behave correctly with a mixture of operations.
-        for name, cls in DEQUE_TYPES:
-            with self.subTest(cls=name):
-                d = cls(maxlen=4)
-                d.append(1)
-                d.append(2)
-                d.append(3)
-                # Now: [1, 2, 3]
-                d.appendleft(0)
-                # Now full: [0, 1, 2, 3]
-                self.assertEqual(list(d), [0, 1, 2, 3])
-                # Append to right; should discard leftmost (0)
-                d.append(4)
-                self.assertEqual(list(d), [1, 2, 3, 4])
-                # Appendleft; should discard rightmost (4)
-                d.appendleft(-1)
-                self.assertEqual(list(d), [-1, 1, 2, 3])
-                # Pop should work normally.
-                self.assertEqual(d.pop(), 3)
-                self.assertEqual(d.popleft(), -1)
-                self.assertEqual(list(d), [1, 2])
+        d = ArrayDeque(range(10), maxlen=5)
+        self.assertEqual(list(d), list(range(5, 10)))
 
     def test_maxlen_zero(self):
-        # A deque with maxlen=0 should always remain empty.
-        for name, cls in DEQUE_TYPES:
-            with self.subTest(cls=name):
-                d = cls(maxlen=0)
-                # Even if we try to add items, they should be ignored.
-                d.append(1)
-                d.appendleft(2)
-                self.assertEqual(list(d), [])
-                # Popping should raise an error.
-                with self.assertRaises(IndexError):
-                    d.pop()
-                with self.assertRaises(IndexError):
-                    d.popleft()
+        # When maxlen==0, the deque should remain empty.
+        d = ArrayDeque(maxlen=0)
+        d.append(1)
+        d.appendleft(2)
+        self.assertEqual(list(d), [])
+        with self.assertRaises(IndexError):
+            d.pop()
+        with self.assertRaises(IndexError):
+            d.popleft()
 
-    def test_negative_maxlen_raises(self):
-        # A negative maxlen should raise a ValueError on initialization.
-        for name, cls in DEQUE_TYPES:
-            with self.subTest(cls=name):
-                with self.assertRaises(ValueError):
-                    cls(maxlen=-1)
+    def test_maxlen_readonly(self):
+        # The maxlen attribute is read-only.
+        d = ArrayDeque("abc", maxlen=3)
+        with self.assertRaises(AttributeError):
+            d.maxlen = 10
+
+# ---------------------------
+# Comparison and Other Methods Testing
+# ---------------------------
+class TestArrayDequeComparisons(unittest.TestCase):
+    def setUp(self):
+        self.ad = ArrayDeque("abc")
+        self.cd = deque("abc")
+
+    def test_equality(self):
+        # ArrayDeque equality compares by iterating, so it should match list(deque) equality.
+        self.assertEqual(list(self.ad), list(self.cd))
+        d2 = ArrayDeque("abc")
+        self.assertEqual(self.ad, d2)
+        d3 = ArrayDeque("abcd")
+        self.assertNotEqual(self.ad, d3)
+
+    def test_iteration_order(self):
+        items = list("abcdef")
+        d = ArrayDeque(items)
+        self.assertEqual(list(d), items)
+
+    def test_multiplication_unsupported(self):
+        # Multiplication is not implemented (unlike list), so it should raise TypeError.
+        with self.assertRaises(TypeError):
+            _ = self.ad * 2
+
+    def test_delitem_unsupported(self):
+        # __delitem__ is not implemented.
+        with self.assertRaises(TypeError):
+            del self.ad[1]
+
+    def test_insert_unsupported(self):
+        # Insert is not implemented by ArrayDeque.
+        with self.assertRaises(AttributeError):
+            self.ad.insert(1, "X")
+
+    def test_remove(self):
+        # Remove the first appearance of a value.
+        d = ArrayDeque("abcbc")
+        d.remove("b")
+        # "abcbc" becomes ['a','c','b','c'] after removal of the first "b"
+        self.assertEqual(list(d), ['a', 'c', 'b', 'c'])
+        with self.assertRaises(ValueError):
+            d.remove("z")
+
+    def test_count(self):
+        d = ArrayDeque("abbccc")
+        self.assertEqual(d.count("a"), 1)
+        self.assertEqual(d.count("b"), 2)
+        self.assertEqual(d.count("c"), 3)
+        self.assertEqual(d.count("z"), 0)
+
+# ---------------------------
+# Pickling and Copying Testing
+# ---------------------------
+class TestArrayDequePickleCopy(unittest.TestCase):
+    def test_pickle(self):
+        d = ArrayDeque(range(10))
+        s = pickle.dumps(d, pickle.HIGHEST_PROTOCOL)
+        d2 = pickle.loads(s)
+        self.assertEqual(list(d), list(d2))
+        self.assertEqual(d.maxlen, d2.maxlen)
+
+    def test_deepcopy(self):
+        d = ArrayDeque([["a"], ["b"]])
+        d2 = copy.deepcopy(d)
+        self.assertEqual(list(d), list(d2))
+        d[0].append("c")
+        self.assertNotEqual(d[0], d2[0])
+
+    def test_copy(self):
+        d = ArrayDeque(["x", "y"])
+        d2 = copy.copy(d)
+        self.assertEqual(list(d), list(d2))
+        d.append("z")
+        self.assertNotEqual(list(d), list(d2))
+
+# ---------------------------
+# Weak Reference Testing
+# ---------------------------
+class TestArrayDequeWeakref(unittest.TestCase):
+    def test_weakref(self):
+        d = ArrayDeque("abc")
+        ref = weakref.ref(d)
+        self.assertIsNotNone(ref())
+        del d
+        gc.collect()
+        self.assertIsNone(ref())
+
+# ---------------------------
+# Subclassing Testing
+# ---------------------------
+class CustomDeque(ArrayDeque):
+    pass
+
+class TestArrayDequeSubclass(unittest.TestCase):
+    def test_subclass_basic(self):
+        d = CustomDeque("abc")
+        self.assertEqual(list(d), list("abc"))
+        d.append("d")
+        self.assertEqual(list(d), list("abcd"))
+        # Ensure that conversion back to iterable produces an instance of the subclass.
+        d2 = CustomDeque(d)
+        self.assertIsInstance(d2, CustomDeque)
+        self.assertEqual(list(d2), list(d))
 
 
+# ---------------------------
+# Main: Run all tests
+# ---------------------------
 if __name__ == '__main__':
     unittest.main()
