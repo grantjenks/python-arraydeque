@@ -38,11 +38,13 @@ jobs:
           path: wheelhouse/*.whl
 
   publish:
-    # Wait for all platforms to build, then publish wheels.
+    # Wait for all platforms to build, then publish wheels and a source distribution.
     needs: build_wheels
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download wheels (Ubuntu)
         uses: actions/download-artifact@v4
         with:
@@ -61,10 +63,15 @@ jobs:
           name: wheels-windows-latest
           path: wheels
 
-      - name: Publish wheels to PyPI
+      - name: Build source distribution
+        run: |
+          python -m pip install --upgrade pip setuptools wheel build
+          python -m build --sdist --outdir sdist
+
+      - name: Publish wheels and source distribution to PyPI
         run: |
           python -m pip install --upgrade pip setuptools wheel twine
-          twine upload wheels/*.whl
+          twine upload wheels/*.whl sdist/*.tar.gz
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
