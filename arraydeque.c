@@ -6,7 +6,7 @@
    If ARRAYDEQUE_VERSION is already defined (for example via a compiler flag),
    we won’t override it. */
 #ifndef ARRAYDEQUE_VERSION
-#define ARRAYDEQUE_VERSION "1.1.0"
+#define ARRAYDEQUE_VERSION "1.1.1"
 #endif
 
 /* The ArrayDeque object structure.
