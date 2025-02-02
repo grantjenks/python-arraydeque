@@ -13,7 +13,6 @@ To run the tests:
 """
 
 import unittest
-import random
 import pickle
 import copy
 import weakref
@@ -142,25 +141,26 @@ class TestArrayDequeBasic(unittest.TestCase):
         d2 = ArrayDeque([])
         self.assertEqual(list(d2), [])
 
+
 # ---------------------------
 # Rotation Testing
 # ---------------------------
 class TestArrayDequeRotation(unittest.TestCase):
     def setUp(self):
-        self.d = ArrayDeque("abcde")
+        self.d = ArrayDeque('abcde')
 
     def test_rotate_right(self):
         self.d.rotate(1)
-        self.assertEqual(list(self.d), list("eabcd"))
+        self.assertEqual(list(self.d), list('eabcd'))
 
     def test_rotate_left(self):
         self.d.rotate(-1)
-        self.assertEqual(list(self.d), list("bcdea"))
+        self.assertEqual(list(self.d), list('bcdea'))
 
     def test_rotate_default(self):
         # Default rotate() rotates by 1.
         self.d.rotate()
-        self.assertEqual(list(self.d), list("eabcd"))
+        self.assertEqual(list(self.d), list('eabcd'))
 
     def test_rotate_multiple(self):
         original = list(self.d)
@@ -173,6 +173,7 @@ class TestArrayDequeRotation(unittest.TestCase):
         d_empty = ArrayDeque()
         d_empty.rotate(5)
         self.assertEqual(list(d_empty), [])
+
 
 # ---------------------------
 # Maxlen (Bounded) Behavior Testing
@@ -225,28 +226,29 @@ class TestArrayDequeMaxlen(unittest.TestCase):
 
     def test_maxlen_readonly(self):
         # The maxlen attribute is read-only.
-        d = ArrayDeque("abc", maxlen=3)
+        d = ArrayDeque('abc', maxlen=3)
         with self.assertRaises(AttributeError):
             d.maxlen = 10
+
 
 # ---------------------------
 # Comparison and Other Methods Testing
 # ---------------------------
 class TestArrayDequeComparisons(unittest.TestCase):
     def setUp(self):
-        self.ad = ArrayDeque("abc")
-        self.cd = deque("abc")
+        self.ad = ArrayDeque('abc')
+        self.cd = deque('abc')
 
     def test_equality(self):
         # ArrayDeque equality compares by iterating, so it should match list(deque) equality.
         self.assertEqual(list(self.ad), list(self.cd))
-        d2 = ArrayDeque("abc")
+        d2 = ArrayDeque('abc')
         self.assertEqual(self.ad, d2)
-        d3 = ArrayDeque("abcd")
+        d3 = ArrayDeque('abcd')
         self.assertNotEqual(self.ad, d3)
 
     def test_iteration_order(self):
-        items = list("abcdef")
+        items = list('abcdef')
         d = ArrayDeque(items)
         self.assertEqual(list(d), items)
 
@@ -263,23 +265,24 @@ class TestArrayDequeComparisons(unittest.TestCase):
     def test_insert_unsupported(self):
         # Insert is not implemented by ArrayDeque.
         with self.assertRaises(AttributeError):
-            self.ad.insert(1, "X")
+            self.ad.insert(1, 'X')
 
     def test_remove(self):
         # Remove the first appearance of a value.
-        d = ArrayDeque("abcbc")
-        d.remove("b")
+        d = ArrayDeque('abcbc')
+        d.remove('b')
         # "abcbc" becomes ['a','c','b','c'] after removal of the first "b"
         self.assertEqual(list(d), ['a', 'c', 'b', 'c'])
         with self.assertRaises(ValueError):
-            d.remove("z")
+            d.remove('z')
 
     def test_count(self):
-        d = ArrayDeque("abbccc")
-        self.assertEqual(d.count("a"), 1)
-        self.assertEqual(d.count("b"), 2)
-        self.assertEqual(d.count("c"), 3)
-        self.assertEqual(d.count("z"), 0)
+        d = ArrayDeque('abbccc')
+        self.assertEqual(d.count('a'), 1)
+        self.assertEqual(d.count('b'), 2)
+        self.assertEqual(d.count('c'), 3)
+        self.assertEqual(d.count('z'), 0)
+
 
 # ---------------------------
 # Pickling and Copying Testing
@@ -293,30 +296,32 @@ class TestArrayDequePickleCopy(unittest.TestCase):
         self.assertEqual(d.maxlen, d2.maxlen)
 
     def test_deepcopy(self):
-        d = ArrayDeque([["a"], ["b"]])
+        d = ArrayDeque([['a'], ['b']])
         d2 = copy.deepcopy(d)
         self.assertEqual(list(d), list(d2))
-        d[0].append("c")
+        d[0].append('c')
         self.assertNotEqual(d[0], d2[0])
 
     def test_copy(self):
-        d = ArrayDeque(["x", "y"])
+        d = ArrayDeque(['x', 'y'])
         d2 = copy.copy(d)
         self.assertEqual(list(d), list(d2))
-        d.append("z")
+        d.append('z')
         self.assertNotEqual(list(d), list(d2))
+
 
 # ---------------------------
 # Weak Reference Testing
 # ---------------------------
 class TestArrayDequeWeakref(unittest.TestCase):
     def test_weakref(self):
-        d = ArrayDeque("abc")
+        d = ArrayDeque('abc')
         ref = weakref.ref(d)
         self.assertIsNotNone(ref())
         del d
         gc.collect()
         self.assertIsNone(ref())
+
 
 # ---------------------------
 # Subclassing Testing
@@ -324,12 +329,13 @@ class TestArrayDequeWeakref(unittest.TestCase):
 class CustomDeque(ArrayDeque):
     pass
 
+
 class TestArrayDequeSubclass(unittest.TestCase):
     def test_subclass_basic(self):
-        d = CustomDeque("abc")
-        self.assertEqual(list(d), list("abc"))
-        d.append("d")
-        self.assertEqual(list(d), list("abcd"))
+        d = CustomDeque('abc')
+        self.assertEqual(list(d), list('abc'))
+        d.append('d')
+        self.assertEqual(list(d), list('abcd'))
         # Ensure that conversion back to iterable produces an instance of the subclass.
         d2 = CustomDeque(d)
         self.assertIsInstance(d2, CustomDeque)
