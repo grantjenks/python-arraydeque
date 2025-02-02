@@ -63,7 +63,7 @@ jobs:
 
       - name: Publish wheels to PyPI
         run: |
-          python -m pip install --upgrade pip twine
+          python -m pip install --upgrade pip setuptools wheel twine
           twine upload wheels/*.whl
         env:
           TWINE_USERNAME: __token__
