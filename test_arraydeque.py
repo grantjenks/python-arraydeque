@@ -3,9 +3,16 @@ import arraydeque
 from arraydeque import ArrayDeque
 from collections import deque
 
+# A helper list of deque types to test.
+DEQUE_TYPES = [
+    ('collections.deque', deque),
+    ('arraydeque.ArrayDeque', ArrayDeque),
+]
+
 
 class TestArrayDeque(unittest.TestCase):
     def setUp(self):
+        # For tests that don't concern maxlen, use the ArrayDeque implementation.
         self.deque = ArrayDeque()
 
     def test_append_and_pop(self):
@@ -173,7 +180,6 @@ class TestArrayDeque(unittest.TestCase):
 
     def test_initializer_with_iterable(self):
         # Test that the initializer accepts an iterable, similar to collections.deque.
-        # Assuming that ArrayDeque has been extended to support an iterable as an argument.
         ad = ArrayDeque([1, 2, 3, 4])
         self.assertEqual(list(ad), [1, 2, 3, 4])
         # Test with an empty iterable.
@@ -184,6 +190,109 @@ class TestArrayDeque(unittest.TestCase):
         # Version should be set to a valid non-zero version.
         ver_tuple = tuple(map(int, arraydeque.__version__.split('.')))
         self.assertGreater(ver_tuple, (0, 0, 0))
+
+
+class TestMaxlenBehavior(unittest.TestCase):
+    def test_default_maxlen(self):
+        # When maxlen is not specified, it should be None.
+        for name, cls in DEQUE_TYPES:
+            with self.subTest(cls=name):
+                d = cls()
+                self.assertIsNone(getattr(d, 'maxlen', None))
+
+    def test_maxlen_attribute_set_on_init(self):
+        # Test that when a maxlen is provided at initialization, the attribute is set.
+        for name, cls in DEQUE_TYPES:
+            with self.subTest(cls=name):
+                d = cls([1, 2, 3], maxlen=5)
+                self.assertEqual(d.maxlen, 5)
+
+    def test_bounded_append(self):
+        # When the deque is bounded and full, appending to the right should discard the leftmost element.
+        for name, cls in DEQUE_TYPES:
+            with self.subTest(cls=name):
+                d = cls(maxlen=3)
+                d.append(1)
+                d.append(2)
+                d.append(3)
+                self.assertEqual(list(d), [1, 2, 3])
+                d.append(4)
+                # The oldest element (1) should be removed.
+                self.assertEqual(list(d), [2, 3, 4])
+
+    def test_bounded_appendleft(self):
+        # When the deque is bounded and full, appending to the left should discard the rightmost element.
+        for name, cls in DEQUE_TYPES:
+            with self.subTest(cls=name):
+                d = cls(maxlen=3)
+                d.appendleft(1)
+                d.appendleft(2)
+                d.appendleft(3)
+                self.assertEqual(list(d), [3, 2, 1])
+                d.appendleft(4)
+                # The oldest element on the right (1) should be removed.
+                self.assertEqual(list(d), [4, 3, 2])
+
+    def test_initialization_with_too_many_items(self):
+        # Initializing with an iterable longer than maxlen should retain only the rightmost items.
+        for name, cls in DEQUE_TYPES:
+            with self.subTest(cls=name):
+                d = cls(range(10), maxlen=5)
+                # For collections.deque, the leftmost items are discarded.
+                self.assertEqual(list(d), [5, 6, 7, 8, 9])
+
+    def test_maxlen_immutability(self):
+        # The maxlen attribute should be read-only.
+        for name, cls in DEQUE_TYPES:
+            with self.subTest(cls=name):
+                d = cls(maxlen=4)
+                with self.assertRaises(AttributeError):
+                    d.maxlen = 10
+
+    def test_maxlen_behavior_with_mixed_operations(self):
+        # Test that bounded deques behave correctly with a mixture of operations.
+        for name, cls in DEQUE_TYPES:
+            with self.subTest(cls=name):
+                d = cls(maxlen=4)
+                d.append(1)
+                d.append(2)
+                d.append(3)
+                # Now: [1, 2, 3]
+                d.appendleft(0)
+                # Now full: [0, 1, 2, 3]
+                self.assertEqual(list(d), [0, 1, 2, 3])
+                # Append to right; should discard leftmost (0)
+                d.append(4)
+                self.assertEqual(list(d), [1, 2, 3, 4])
+                # Appendleft; should discard rightmost (4)
+                d.appendleft(-1)
+                self.assertEqual(list(d), [-1, 1, 2, 3])
+                # Pop should work normally.
+                self.assertEqual(d.pop(), 3)
+                self.assertEqual(d.popleft(), -1)
+                self.assertEqual(list(d), [1, 2])
+
+    def test_maxlen_zero(self):
+        # A deque with maxlen=0 should always remain empty.
+        for name, cls in DEQUE_TYPES:
+            with self.subTest(cls=name):
+                d = cls(maxlen=0)
+                # Even if we try to add items, they should be ignored.
+                d.append(1)
+                d.appendleft(2)
+                self.assertEqual(list(d), [])
+                # Popping should raise an error.
+                with self.assertRaises(IndexError):
+                    d.pop()
+                with self.assertRaises(IndexError):
+                    d.popleft()
+
+    def test_negative_maxlen_raises(self):
+        # A negative maxlen should raise a ValueError on initialization.
+        for name, cls in DEQUE_TYPES:
+            with self.subTest(cls=name):
+                with self.assertRaises(ValueError):
+                    cls(maxlen=-1)
 
 
 if __name__ == '__main__':
