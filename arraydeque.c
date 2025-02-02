@@ -407,10 +407,23 @@ ArrayDeque_richcompare(PyObject *self, PyObject *other, int op)
     Py_DECREF(other_list);
     if (equal < 0)
         return NULL;
-    if (op == Py_EQ)
-        return equal ? Py_True : Py_False;
-    else
-        return equal ? Py_False : Py_True;
+    if (op == Py_EQ) {
+        if (equal) {
+            Py_INCREF(Py_True);
+            return Py_True;
+        } else {
+            Py_INCREF(Py_False);
+            return Py_False;
+        }
+    } else {
+        if (equal) {
+            Py_INCREF(Py_False);
+            return Py_False;
+        } else {
+            Py_INCREF(Py_True);
+            return Py_True;
+        }
+    }
 }
 
 /* __repr__ implementation */
