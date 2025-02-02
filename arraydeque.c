@@ -4,7 +4,7 @@
 #include <stddef.h>  /* for offsetof */
 
 #ifndef ARRAYDEQUE_VERSION
-#define ARRAYDEQUE_VERSION "1.2.1"
+#define ARRAYDEQUE_VERSION "1.2.2"
 #endif
 
 /* The ArrayDeque object structure.
