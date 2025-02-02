@@ -4,27 +4,25 @@
 #include <stddef.h>  /* for offsetof */
 
 #ifndef ARRAYDEQUE_VERSION
-#define ARRAYDEQUE_VERSION "1.2.3"
+#define ARRAYDEQUE_VERSION "1.2.4"
 #endif
 
-/* The ArrayDeque object structure.
-   A new field weakreflist is added to support weak references */
+/* The ArrayDeque object structure. */
 typedef struct {
     PyObject_HEAD
-    PyObject *weakreflist;   /* For weak reference support */
-    PyObject **array;        /* Pointer to array of PyObject* */
-    Py_ssize_t capacity;     /* Allocated length of array */
-    Py_ssize_t size;         /* Number of elements stored */
-    Py_ssize_t head;         /* Index of first element */
-    Py_ssize_t tail;         /* Index one past the last element */
-    Py_ssize_t maxlen;       /* Maximum allowed size (if < 0 then unbounded) */
+    PyObject **array;        /* pointer to array of PyObject* */
+    Py_ssize_t capacity;     /* allocated length of array */
+    Py_ssize_t size;         /* number of elements stored */
+    Py_ssize_t head;         /* index of first element */
+    Py_ssize_t tail;         /* index one past the last element */
+    Py_ssize_t maxlen;       /* maximum allowed size (if < 0 then unbounded) */
 } ArrayDequeObject;
 
 /* Forward declaration of type for iterator */
 typedef struct {
     PyObject_HEAD
-    ArrayDequeObject *deque; /* Reference to the deque */
-    Py_ssize_t index;        /* Current index into the deque (0 .. size) */
+    ArrayDequeObject *deque; /* reference to the deque */
+    Py_ssize_t index;        /* current index into the deque (0 .. size) */
 } ArrayDequeIter;
 
 /* Resize the backing array to new_capacity and recenter the data.
@@ -61,9 +59,12 @@ arraydeque_resize(ArrayDequeObject *self, Py_ssize_t new_capacity)
 static PyObject *
 ArrayDeque_append(ArrayDequeObject *self, PyObject *arg)
 {
+    /* If maxlen is 0, do nothing. */
     if (self->maxlen == 0) {
         Py_RETURN_NONE;
     }
+
+    /* If bounded and full, drop the leftmost element. */
     if (self->maxlen >= 0 && self->size == self->maxlen) {
         PyObject *old = self->array[self->head];
         Py_DECREF(old);
@@ -71,6 +72,8 @@ ArrayDeque_append(ArrayDequeObject *self, PyObject *arg)
         self->head++;
         self->size--;
     }
+
+    /* Grow the internal array if needed */
     if (self->tail >= self->capacity) {
         if (arraydeque_resize(self, self->capacity * 2) < 0)
             return NULL;
@@ -92,12 +95,16 @@ ArrayDeque_appendleft(ArrayDequeObject *self, PyObject *arg)
     if (self->maxlen == 0) {
         Py_RETURN_NONE;
     }
+
+    /* If bounded and full, drop the rightmost element */
     if (self->maxlen >= 0 && self->size == self->maxlen) {
         self->tail--;
         Py_DECREF(self->array[self->tail]);
         self->array[self->tail] = NULL;
         self->size--;
     }
+
+    /* Grow the internal array if necessary */
     if (self->head <= 0) {
         if (arraydeque_resize(self, self->capacity * 2) < 0)
             return NULL;
@@ -146,17 +153,19 @@ ArrayDeque_popleft(ArrayDequeObject *self, PyObject *Py_UNUSED(ignored))
 static PyObject *
 ArrayDeque_clear(ArrayDequeObject *self, PyObject *Py_UNUSED(ignored))
 {
-    for (Py_ssize_t i = self->head; i < self->tail; i++) {
+    Py_ssize_t i;
+    for (i = self->head; i < self->tail; i++) {
         Py_CLEAR(self->array[i]);
     }
     self->size = 0;
+    /* Reset head and tail to the center of the current allocation */
     self->head = self->capacity / 2;
     self->tail = self->head;
     Py_RETURN_NONE;
 }
 
 /* Method: extend(iterable)
-   Extend the right side with elements from an iterable. */
+   Extend the right side of the deque by appending elements from the iterable. */
 static PyObject *
 ArrayDeque_extend(ArrayDequeObject *self, PyObject *iterable)
 {
@@ -179,8 +188,8 @@ ArrayDeque_extend(ArrayDequeObject *self, PyObject *iterable)
 }
 
 /* Method: extendleft(iterable)
-   Extend the left side with elements from an iterable.
-   Note the order is reversed relative to the input. */
+   Extend the left side of the deque by appending elements from the iterable.
+   Note that left appends reverse the order relative to the input. */
 static PyObject *
 ArrayDeque_extendleft(ArrayDequeObject *self, PyObject *iterable)
 {
@@ -191,6 +200,8 @@ ArrayDeque_extendleft(ArrayDequeObject *self, PyObject *iterable)
     if (list == NULL)
         return NULL;
     len = PyList_Size(list);
+    /* Iterate in forward order: each call to appendleft will
+       insert the item before the previous ones, thus reversing the input order. */
     for (i = 0; i < len; i++) {
         PyObject *item = PyList_GET_ITEM(list, i);
         if (ArrayDeque_appendleft(self, item) == NULL) {
@@ -203,8 +214,9 @@ ArrayDeque_extendleft(ArrayDequeObject *self, PyObject *iterable)
 }
 
 /* Method: rotate(n=1)
-   Rotate the deque n steps to the right (n negative rotates left).
-   Each rotation uses pop/popleft and append/appendleft. */
+   Rotate the deque n steps to the right. If n is negative, rotate left.
+   Each individual rotation is implemented using pop/popleft and append/appendleft.
+*/
 static PyObject *
 ArrayDeque_rotate(ArrayDequeObject *self, PyObject *args)
 {
@@ -244,7 +256,8 @@ ArrayDeque_rotate(ArrayDequeObject *self, PyObject *args)
 }
 
 /* Method: remove(value)
-   Remove the first occurrence of value. */
+   Remove the first occurrence of value.
+*/
 static PyObject *
 ArrayDeque_remove(ArrayDequeObject *self, PyObject *value)
 {
@@ -262,7 +275,7 @@ ArrayDeque_remove(ArrayDequeObject *self, PyObject *value)
     }
     Py_DECREF(self->array[i]);
     for (Py_ssize_t j = i; j < self->tail - 1; j++) {
-        self->array[j] = self->array[j + 1];
+        self->array[j] = self->array[j+1];
     }
     self->array[self->tail - 1] = NULL;
     self->tail--;
@@ -271,7 +284,8 @@ ArrayDeque_remove(ArrayDequeObject *self, PyObject *value)
 }
 
 /* Method: count(value)
-   Count the number of occurrences of value. */
+   Count the number of occurrences of value.
+*/
 static PyObject *
 ArrayDeque_count(ArrayDequeObject *self, PyObject *value)
 {
@@ -293,7 +307,7 @@ ArrayDeque_length(ArrayDequeObject *self)
     return self->size;
 }
 
-/* Sequence protocol: __getitem__ (only integer indices) */
+/* Sequence protocol: __getitem__ support (only for integer indices) */
 static PyObject *
 ArrayDeque_seq_getitem(ArrayDequeObject *self, Py_ssize_t index)
 {
@@ -308,7 +322,7 @@ ArrayDeque_seq_getitem(ArrayDequeObject *self, Py_ssize_t index)
     return item;
 }
 
-/* Mapping protocol: __getitem__ (same as sequence) */
+/* Mapping protocol: __getitem__ support (same as sequence) */
 static PyObject *
 ArrayDeque_getitem(ArrayDequeObject *self, PyObject *key)
 {
@@ -322,10 +336,11 @@ ArrayDeque_getitem(ArrayDequeObject *self, PyObject *key)
     return ArrayDeque_seq_getitem(self, index);
 }
 
-/* Sequence protocol: __setitem__ (only integer indices) */
+/* Sequence protocol: __setitem__ support (only for integer indices) */
 static int
 ArrayDeque_seq_setitem(ArrayDequeObject *self, Py_ssize_t index, PyObject *value)
 {
+    /* If value is NULL, this signals deletion which is not supported. */
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError, "deque deletion not supported");
         return -1;
@@ -343,7 +358,7 @@ ArrayDeque_seq_setitem(ArrayDequeObject *self, Py_ssize_t index, PyObject *value
     return 0;
 }
 
-/* Mapping protocol: __setitem__ */
+/* Mapping protocol: __setitem__ support */
 static int
 ArrayDeque_setitem(ArrayDequeObject *self, PyObject *key, PyObject *value)
 {
@@ -371,7 +386,7 @@ ArrayDeque_contains(ArrayDequeObject *self, PyObject *value)
     return 0;
 }
 
-/* Rich comparison support: only equality and inequality */
+/* Rich comparison support: only equality and inequality are implemented */
 static PyObject *
 ArrayDeque_richcompare(PyObject *self, PyObject *other, int op)
 {
@@ -454,6 +469,7 @@ ArrayDequeIter_next(ArrayDequeIter *it)
         Py_INCREF(item);
         return item;
     }
+    /* End of iteration */
     return NULL;
 }
 
@@ -468,7 +484,7 @@ static PyTypeObject ArrayDequeIter_Type = {
     .tp_iternext = (iternextfunc)ArrayDequeIter_next,
 };
 
-/* __iter__ method for ArrayDeque */
+/* __iter__ method for ArrayDeque: return a new iterator */
 static PyObject *
 ArrayDeque_iter(ArrayDequeObject *self)
 {
@@ -482,19 +498,17 @@ ArrayDeque_iter(ArrayDequeObject *self)
     return (PyObject *)it;
 }
 
-/* __new__ method: allocate a new ArrayDeque.
-   This version uses PyObject_GC_New to ensure that the object
-   is not already tracked by the garbage collector (fixing issues on macOS). */
+/* __new__ method: allocate a new ArrayDeque */
 static PyObject *
 ArrayDeque_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     ArrayDequeObject *self;
-    self = PyObject_GC_New(ArrayDequeObject, type);
+    self = (ArrayDequeObject *)type->tp_alloc(type, 0);
     if (self == NULL)
         return NULL;
-    self->weakreflist = NULL;
     self->capacity = 8;  /* initial capacity */
     self->size = 0;
+    /* Start in the middle so that both ends have some space */
     self->head = self->capacity / 2;
     self->tail = self->head;
     self->array = PyMem_New(PyObject *, self->capacity);
@@ -508,13 +522,12 @@ ArrayDeque_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     /* Default: unbounded deque */
     self->maxlen = -1;
-    PyObject_GC_Track((PyObject *)self);
     return (PyObject *)self;
 }
 
 /* __init__ method: optionally initialize the deque with an iterable and a maxlen.
    Signature: ArrayDeque([iterable[, maxlen]])
-   If maxlen is provided (and not None) it must be a non-negative integer.
+   If maxlen is provided and not None, it must be a non-negative integer.
    When iterable is longer than maxlen, only the rightmost elements are retained.
 */
 static int
@@ -563,33 +576,11 @@ ArrayDeque_init(ArrayDequeObject *self, PyObject *args, PyObject *kwds)
 static void
 ArrayDeque_dealloc(ArrayDequeObject *self)
 {
-    PyObject_GC_UnTrack(self);
-    PyObject_ClearWeakRefs((PyObject *)self);
     for (Py_ssize_t i = self->head; i < self->tail; i++) {
-        Py_CLEAR(self->array[i]);
+        Py_XDECREF(self->array[i]);
     }
     PyMem_Free(self->array);
     Py_TYPE(self)->tp_free((PyObject *)self);
-}
-
-/* GC traverse function */
-static int
-ArrayDeque_traverse(ArrayDequeObject *self, visitproc visit, void *arg)
-{
-    for (Py_ssize_t i = self->head; i < self->tail; i++) {
-        Py_VISIT(self->array[i]);
-    }
-    return 0;
-}
-
-/* GC clear function */
-static int
-ArrayDeque_clear_func(ArrayDequeObject *self)
-{
-    for (Py_ssize_t i = self->head; i < self->tail; i++) {
-        Py_CLEAR(self->array[i]);
-    }
-    return 0;
 }
 
 /* Getter for the maxlen attribute.
@@ -625,10 +616,11 @@ ArrayDeque_reduce(ArrayDequeObject *self)
             return NULL;
         }
     }
+    /* Build args tuple as (iterable, maxlen) */
     PyObject *args = Py_BuildValue("(OO)", list, maxlen);
     Py_DECREF(list);
     Py_DECREF(maxlen);
-    Py_INCREF(Py_TYPE(self));
+    /* Return a two-tuple: (constructor, args) */
     return Py_BuildValue("OO", Py_TYPE(self), args);
 }
 
@@ -666,7 +658,7 @@ static PyMethodDef ArrayDeque_methods[] = {
     {NULL}  /* Sentinel */
 };
 
-/* Sequence methods */
+/* Define sequence methods (supporting __len__, __getitem__, __setitem__, and __contains__) */
 static PySequenceMethods ArrayDeque_as_sequence = {
     (lenfunc)ArrayDeque_length,               /* sq_length */
     0,                                        /* sq_concat */
@@ -680,7 +672,7 @@ static PySequenceMethods ArrayDeque_as_sequence = {
     0                                         /* sq_inplace_repeat */
 };
 
-/* Mapping methods */
+/* Define mapping methods so that deque[index] works as expected. */
 static PyMappingMethods ArrayDeque_as_mapping = {
     (lenfunc)ArrayDeque_length,       /* mp_length */
     (binaryfunc)ArrayDeque_getitem,   /* mp_subscript */
@@ -695,7 +687,7 @@ static PyTypeObject ArrayDequeType = {
     .tp_basicsize = sizeof(ArrayDequeObject),
     .tp_itemsize = 0,
     .tp_dealloc = (destructor)ArrayDeque_dealloc,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_new = ArrayDeque_new,
     .tp_init = (initproc)ArrayDeque_init,
     .tp_iter = (getiterfunc)ArrayDeque_iter,
@@ -706,9 +698,6 @@ static PyTypeObject ArrayDequeType = {
     .tp_str = (reprfunc)ArrayDeque_str,
     .tp_repr = (reprfunc)ArrayDeque_repr,
     .tp_richcompare = ArrayDeque_richcompare,
-    .tp_weaklistoffset = offsetof(ArrayDequeObject, weakreflist),
-    .tp_traverse = (traverseproc)ArrayDeque_traverse,
-    .tp_clear = (inquiry)ArrayDeque_clear_func,
 };
 
 /* Module definition */

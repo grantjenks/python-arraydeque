@@ -15,8 +15,6 @@ To run the tests:
 import unittest
 import pickle
 import copy
-import weakref
-import gc
 
 from arraydeque import ArrayDeque
 from collections import deque  # for reference comparisons
@@ -308,19 +306,6 @@ class TestArrayDequePickleCopy(unittest.TestCase):
         self.assertEqual(list(d), list(d2))
         d.append('z')
         self.assertNotEqual(list(d), list(d2))
-
-
-# ---------------------------
-# Weak Reference Testing
-# ---------------------------
-class TestArrayDequeWeakref(unittest.TestCase):
-    def test_weakref(self):
-        d = ArrayDeque('abc')
-        ref = weakref.ref(d)
-        self.assertIsNotNone(ref())
-        del d
-        gc.collect()
-        self.assertIsNone(ref())
 
 
 # ---------------------------
