@@ -6,62 +6,62 @@ on:
       - 'v*'   # Trigger on version tags such as v1.0.0
 
 jobs:
-  build_wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-13, macos-latest]
+  # build_wheels:
+  #   name: Build wheels on ${{ matrix.os }}
+  #   runs-on: ${{ matrix.os }}
+  #   strategy:
+  #     matrix:
+  #       os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-13, macos-latest]
 
-    steps:
-      - uses: actions/checkout@v4
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.x
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: 3.x
 
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install cibuildwheel==2.*
+  #     - name: Install build dependencies
+  #       run: |
+  #         python -m pip install --upgrade pip
+  #         pip install cibuildwheel==2.*
 
-      - name: Build wheels with cibuildwheel
-        env:
-          CIBW_TEST_COMMAND: python {package}/test_arraydeque.py
-        run: cibuildwheel --output-dir wheelhouse .
+  #     - name: Build wheels with cibuildwheel
+  #       env:
+  #         CIBW_TEST_COMMAND: python {package}/test_arraydeque.py
+  #       run: cibuildwheel --output-dir wheelhouse .
 
-      - name: Upload built wheels
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheels-${{ matrix.os }}
-          path: wheelhouse/*.whl
+  #     - name: Upload built wheels
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: wheels-${{ matrix.os }}
+  #         path: wheelhouse/*.whl
 
   publish:
     # Wait for all platforms to build, then publish wheels and a source distribution.
-    needs: build_wheels
+    # needs: build_wheels
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download wheels (Ubuntu)
-        uses: actions/download-artifact@v4
-        with:
-          name: wheels-ubuntu-latest
-          path: wheels
+      # - name: Download wheels (Ubuntu)
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: wheels-ubuntu-latest
+      #     path: wheels
 
-      - name: Download wheels (macOS)
-        uses: actions/download-artifact@v4
-        with:
-          name: wheels-macos-latest
-          path: wheels
+      # - name: Download wheels (macOS)
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: wheels-macos-latest
+      #     path: wheels
 
-      - name: Download wheels (Windows)
-        uses: actions/download-artifact@v4
-        with:
-          name: wheels-windows-latest
-          path: wheels
+      # - name: Download wheels (Windows)
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: wheels-windows-latest
+      #     path: wheels
 
       - name: Build source distribution
         run: |
@@ -71,7 +71,8 @@ jobs:
       - name: Publish wheels and source distribution to PyPI
         run: |
           python -m pip install --upgrade pip setuptools wheel twine
-          twine upload wheels/*.whl sdist/*.tar.gz
+          twine upload sdist/*.tar.gz
+        # twine upload wheels/*.whl sdist/*.tar.gz
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
