@@ -65,12 +65,11 @@ jobs:
 
       - name: Build source distribution
         run: |
-          python -m pip install --upgrade pip setuptools wheel build
+          python -m pip install --upgrade pip setuptools wheel build twine
           python -m build --sdist --outdir sdist
 
       - name: Publish wheels and source distribution to PyPI
         run: |
-          python -m pip install --upgrade pip setuptools wheel twine
           twine upload sdist/*.tar.gz
         # twine upload wheels/*.whl sdist/*.tar.gz
         env:
