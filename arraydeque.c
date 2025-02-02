@@ -1,26 +1,23 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
+#include <stddef.h>  /* for offsetof */
 
-/* Define the module version here.
-   If ARRAYDEQUE_VERSION is already defined (for example via a compiler flag),
-   we won’t override it. */
 #ifndef ARRAYDEQUE_VERSION
 #define ARRAYDEQUE_VERSION "1.1.1"
 #endif
 
 /* The ArrayDeque object structure.
-   We keep an array of PyObject*, a capacity, the current number
-   of items (size), two indices (head and tail), and a maximum length.
-   If maxlen is negative, then the deque is unbounded. */
+   A new field weakreflist is added to support weak references. */
 typedef struct {
     PyObject_HEAD
-    PyObject **array;       /* pointer to array of PyObject* */
-    Py_ssize_t capacity;    /* allocated length of array */
-    Py_ssize_t size;        /* number of elements stored */
-    Py_ssize_t head;        /* index of first element */
-    Py_ssize_t tail;        /* index one past the last element */
-    Py_ssize_t maxlen;      /* maximum allowed size (if < 0 then unbounded) */
+    PyObject *weakreflist;   /* For weak reference support */
+    PyObject **array;        /* pointer to array of PyObject* */
+    Py_ssize_t capacity;     /* allocated length of array */
+    Py_ssize_t size;         /* number of elements stored */
+    Py_ssize_t head;         /* index of first element */
+    Py_ssize_t tail;         /* index one past the last element */
+    Py_ssize_t maxlen;       /* maximum allowed size (if < 0 then unbounded) */
 } ArrayDequeObject;
 
 /* Forward declaration of type for iterator */
@@ -49,7 +46,6 @@ arraydeque_resize(ArrayDequeObject *self, Py_ssize_t new_capacity)
     for (i = 0; i < self->size; i++) {
         new_array[new_head + i] = self->array[self->head + i];
     }
-    /* Free the old array and update the structure */
     PyMem_Free(self->array);
     self->array = new_array;
     self->capacity = new_capacity;
@@ -499,6 +495,7 @@ ArrayDeque_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     self = (ArrayDequeObject *)type->tp_alloc(type, 0);
     if (self == NULL)
         return NULL;
+    self->weakreflist = NULL;
     self->capacity = 8;  /* initial capacity */
     self->size = 0;
     /* Start in the middle so that both ends have some space */
@@ -569,8 +566,8 @@ ArrayDeque_init(ArrayDequeObject *self, PyObject *args, PyObject *kwds)
 static void
 ArrayDeque_dealloc(ArrayDequeObject *self)
 {
-    Py_ssize_t i;
-    for (i = self->head; i < self->tail; i++) {
+    PyObject_ClearWeakRefs((PyObject *)self);
+    for (Py_ssize_t i = self->head; i < self->tail; i++) {
         Py_XDECREF(self->array[i]);
     }
     PyMem_Free(self->array);
@@ -610,14 +607,12 @@ ArrayDeque_reduce(ArrayDequeObject *self)
             return NULL;
         }
     }
+    /* Build args tuple as (iterable, maxlen) */
     PyObject *args = Py_BuildValue("(OO)", list, maxlen);
     Py_DECREF(list);
     Py_DECREF(maxlen);
-    if (!args)
-         return NULL;
-    PyObject *result = Py_BuildValue("O(O)", Py_TYPE(self), args);
-    Py_DECREF(args);
-    return result;
+    /* Return a two-tuple: (constructor, args) */
+    return Py_BuildValue("OO", Py_TYPE(self), args);
 }
 
 /* Get/Set definitions */
@@ -694,6 +689,7 @@ static PyTypeObject ArrayDequeType = {
     .tp_str = (reprfunc)ArrayDeque_str,
     .tp_repr = (reprfunc)ArrayDeque_repr,
     .tp_richcompare = ArrayDeque_richcompare,
+    .tp_weaklistoffset = offsetof(ArrayDequeObject, weakreflist),
 };
 
 /* Module definition */
