@@ -65,7 +65,7 @@ jobs:
 
       - name: Build source distribution
         run: |
-          python -m pip install --upgrade pip setuptools wheel build twine pkginfo
+          python -m pip install --upgrade pip setuptools wheel build twine==6.0.* pkginfo
           python -m build --sdist --outdir sdist
 
       - name: Publish wheels and source distribution to PyPI
