@@ -75,7 +75,7 @@ ArrayDeque_append(ArrayDequeObject *self, PyObject *arg)
 
     /* Grow the internal array if needed */
     if (self->tail >= self->capacity) {
-        if (arraydeque_resize(self, self->capacity * 2) < 0)
+        if (arraydeque_resize(self, self->size * 2) < 0)
             return NULL;
     }
     Py_INCREF(arg);
@@ -106,7 +106,7 @@ ArrayDeque_appendleft(ArrayDequeObject *self, PyObject *arg)
 
     /* Grow the internal array if necessary */
     if (self->head <= 0) {
-        if (arraydeque_resize(self, self->capacity * 2) < 0)
+        if (arraydeque_resize(self, self->size * 2) < 0)
             return NULL;
     }
     self->head--;
